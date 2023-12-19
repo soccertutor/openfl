@@ -130,6 +130,7 @@ class TextField extends InteractiveObject
 	@:noCompletion private static var __defaultTextFormat:TextFormat;
 	@:noCompletion private static var __missingFontWarning:Map<String, Bool> = new Map();
 
+	#if false
 	/**
 		When set to `true` and the text field is not in focus, Flash Player
 		highlights the selection in the text field in gray. When set to
@@ -139,6 +140,7 @@ class TextField extends InteractiveObject
 		@default false
 	**/
 	// var alwaysShowSelection : Bool;
+	#end
 
 	/**
 		The type of anti-aliasing used for this text field. Use
@@ -614,6 +616,7 @@ class TextField extends InteractiveObject
 	**/
 	public var textHeight(get, never):Float;
 
+	#if false
 	/**
 		The interaction mode property, Default value is
 		TextInteractionMode.NORMAL. On mobile platforms, the normal mode
@@ -623,6 +626,7 @@ class TextField extends InteractiveObject
 		scrollable as well as selection mode.
 	**/
 	// @:require(flash11) var textInteractionMode(default,never) : TextInteractionMode;
+	#end
 
 	/**
 		The width of the text in pixels.
@@ -650,6 +654,7 @@ class TextField extends InteractiveObject
 	**/
 	public var type(get, set):TextFieldType;
 
+	#if false
 	/**
 		Specifies whether to copy and paste the text formatting along with the
 		text. When set to `true`, Flash Player copies and pastes formatting
@@ -659,6 +664,7 @@ class TextField extends InteractiveObject
 		The default value is `false`.
 	**/
 	// var useRichTextClipboard : Bool;
+	#end
 
 	/**
 		A Boolean value that indicates whether the text field has word wrap. If
@@ -667,6 +673,7 @@ class TextField extends InteractiveObject
 		have word wrap. The default value is `false`.
 	**/
 	public var wordWrap(get, set):Bool;
+
 	public var textDirection(get, set):TextDirection;
 	public var script(get, set):TextScript;
 	public var language(get, set):String;
@@ -997,6 +1004,7 @@ class TextField extends InteractiveObject
 		return __textEngine.lineBreaks[__textEngine.lineBreaks.length - 1] + 1;
 	}
 
+	#if false
 	/**
 		Returns a DisplayObject reference for the given `id`, for an image or
 		SWF file that has been added to an HTML-formatted text field by using
@@ -1017,6 +1025,7 @@ class TextField extends InteractiveObject
 				matching `id` exists, the method returns `null`.
 	**/
 	// function getImageReference(id : String) : openfl.display.DisplayObject;
+	#end
 
 	/**
 		Returns the zero-based index value of the line at the point specified by
@@ -1300,6 +1309,7 @@ class TextField extends InteractiveObject
 		return format;
 	}
 
+	#if false
 	/**
 		Returns true if an embedded font is available with the specified
 		`fontName` and `fontStyle` where `Font.fontType` is
@@ -1328,6 +1338,7 @@ class TextField extends InteractiveObject
 							  `openfl.text.FontStyle`.
 	**/
 	// @:require(flash10) static function isFontCompatible(fontName : String, fontStyle : String) : Bool;
+	#end
 
 	/**
 		Replaces the current selection with the contents of the `value`
@@ -1395,6 +1406,10 @@ class TextField extends InteractiveObject
 		if (stage != null && stage.focus == this)
 		{
 			__stopCursorTimer();
+			// we should call __startCursorTimer() even if type != INPUT or
+			// __inputEnabled is false. if a TextField is selectable, but not
+			// currently accepting input, __startCursorTimer() marks it dirty
+			// to show selection
 			__startCursorTimer();
 		}
 	}
@@ -1584,7 +1599,7 @@ class TextField extends InteractiveObject
 				{
 					// should never happen, throw an error
 					index++;
-					Log.warn("You found a bug in OpenFL's text code! Please save a copy of your project and contact Joshua Granick (@singmajesty) so we can fix this.");
+					Log.warn("You found a bug in OpenFL's text code! Please save a copy of your project and create an issue on GitHub so we can fix this.");
 				}
 			}
 			/*
@@ -1789,6 +1804,10 @@ class TextField extends InteractiveObject
 				}
 
 				__inputEnabled = true;
+				// stopping the timer shouldn't be strictly necessary, but it
+				// doesn't hurt if there's a bug where a timer was started
+				// after focus in, but before __inputEnabled is set to true
+				__stopCursorTimer();
 				__startCursorTimer();
 			}
 		}
@@ -1951,12 +1970,13 @@ class TextField extends InteractiveObject
 
 			if ((y >= group.offsetY && y <= group.offsetY + group.height) || (!precise && nextGroup == null))
 			{
-				if ((x >= group.offsetX && x <= group.offsetX + group.width) || (!precise && (nextGroup == null || nextGroup.lineIndex != group.lineIndex)))
+				if ((x >= group.offsetX && x <= group.offsetX + group.width)
+					|| (!precise && (nextGroup == null || nextGroup.lineIndex != group.lineIndex)))
 				{
 					return group;
 				}
-				else if (((group.textDirection() == TextDirection.RIGHT_TO_LEFT) && x <= group.offsetX + group
-					.width) || (!precise && (nextGroup == null || nextGroup.lineIndex != group.lineIndex)))
+				else if (((group.textDirection() == TextDirection.RIGHT_TO_LEFT) && x <= group.offsetX + group.width)
+					|| (!precise && (nextGroup == null || nextGroup.lineIndex != group.lineIndex)))
 				{
 					return group;
 				}
@@ -2121,7 +2141,7 @@ class TextField extends InteractiveObject
 					// this should only ever be true if there is no text (start == end == 0)
 					if (range.start != 0)
 					{
-						Log.warn("You found a bug in OpenFL's text code! Please save a copy of your project and contact Joshua Granick (@singmajesty) so we can fix this.");
+						Log.warn("You found a bug in OpenFL's text code! Please save a copy of your project and create an issue on GitHub so we can fix this.");
 					}
 					else
 					{
@@ -2213,8 +2233,11 @@ class TextField extends InteractiveObject
 	{
 		if (type == INPUT)
 		{
-			__cursorTimer = Timer.delay(__startCursorTimer, 600);
-			__showCursor = !__showCursor;
+			if (__inputEnabled)
+			{
+				__cursorTimer = Timer.delay(__startCursorTimer, 600);
+				__showCursor = !__showCursor;
+			}
 			__dirty = true;
 			__setRenderDirty();
 		}
@@ -2299,11 +2322,57 @@ class TextField extends InteractiveObject
 		}
 	}
 
+	@:noCompletion private function __updateMouseDrag():Void
+	{
+		var bounds:Rectangle = this.getBounds(this);
+
+		if (textDirection.forward)
+		{
+			if (mouseX > bounds.width - 1)
+			{
+				scrollH += Std.int(Math.max(Math.min((mouseX - bounds.width) * .1, 10), 1));
+			}
+			else if (mouseX < 1)
+			{
+				scrollH -= Std.int(Math.max(Math.min(mouseX * -.1, 10), 1));
+			}
+		}
+		else
+		{
+			if (mouseX < 0)
+			{
+				scrollH += Std.int(Math.max(Math.min((mouseX - bounds.width) * .1, 10), 1));
+			}
+			else if (mouseX > bounds.width - 1)
+			{
+				scrollH -= Std.int(Math.max(Math.min(mouseX * -.1, 10), 1));
+			}
+		}
+
+		__mouseScrollVCounter++;
+
+		if (__mouseScrollVCounter > stage.frameRate / 10)
+		{
+			if (mouseY > bounds.height - 2)
+			{
+				scrollV = Std.int(Math.min(scrollV + Math.max(Math.min((mouseY - bounds.height) * .03, 5), 1), maxScrollV));
+			}
+			else if (mouseY < 2)
+			{
+				scrollV -= Std.int(Math.max(Math.min(mouseY * -.03, 5), 1));
+			}
+			__mouseScrollVCounter = 0;
+		}
+		stage_onMouseMove(null);
+	}
+
 	@:noCompletion private function __updateScrollH():Void
 	{
 		__updateLayout();
 
-		if (textWidth <= width - 4)
+		var bounds:Rectangle = this.getBounds(this);
+
+		if (textWidth <= bounds.width - 4)
 		{
 			scrollH = 0;
 			return;
@@ -2340,7 +2409,7 @@ class TextField extends InteractiveObject
 				tempScrollH -= 24;
 			}
 
-			while (caret.x > tempScrollH + width - 4)
+			while (caret.x > tempScrollH + bounds.width - 4)
 			{
 				tempScrollH += 24;
 			}
@@ -2352,9 +2421,9 @@ class TextField extends InteractiveObject
 		{
 			// input text leaves some room after scrolling to the last character in a line. dynamic text does not
 			var lineLength = getLineLength(getLineIndexOfChar(__caretIndex));
-			if (scrollH + width - 4 > lineLength)
+			if (scrollH + bounds.width - 4 > lineLength)
 			{
-				scrollH = Math.ceil(lineLength - width + 4);
+				scrollH = Math.ceil(lineLength - bounds.width + 4);
 			}
 		}
 
@@ -2377,8 +2446,6 @@ class TextField extends InteractiveObject
 		{
 			// TODO : Handle RTL
 		}
-
-		// TODO: Handle drag select
 	}
 
 	@:noCompletion private function __updateScrollV():Void
@@ -2441,48 +2508,6 @@ class TextField extends InteractiveObject
 
 			scrollV = scrollV;
 		}
-	}
-
-	@:noCompletion private function __updateMouseDrag():Void
-	{
-		if (textDirection.forward)
-		{
-			if (mouseX > this.width - 1)
-			{
-				scrollH += Std.int(Math.max(Math.min((mouseX - this.width) * .1, 10), 1));
-			}
-			else if (mouseX < 1)
-			{
-				scrollH -= Std.int(Math.max(Math.min(mouseX * -.1, 10), 1));
-			}
-		}
-		else
-		{
-			if (mouseX < 0)
-			{
-				scrollH += Std.int(Math.max(Math.min((mouseX - this.width) * .1, 10), 1));
-			}
-			else if (mouseX > this.width - 1)
-			{
-				scrollH -= Std.int(Math.max(Math.min(mouseX * -.1, 10), 1));
-			}
-		}
-
-		__mouseScrollVCounter++;
-
-		if (__mouseScrollVCounter > stage.frameRate / 10)
-		{
-			if (mouseY > this.height - 2)
-			{
-				scrollV = Std.int(Math.min(scrollV + Math.max(Math.min((mouseY - this.height) * .03, 5), 1), maxScrollV));
-			}
-			else if (mouseY < 2)
-			{
-				scrollV -= Std.int(Math.max(Math.min(mouseY * -.03, 5), 1));
-			}
-			__mouseScrollVCounter = 0;
-		}
-		stage_onMouseMove(null);
 	}
 
 	@:noCompletion private function __updateText(value:String):Void
@@ -3226,7 +3251,6 @@ class TextField extends InteractiveObject
 		return __textEngine.language;
 	}
 
-
 	@:access(openfl.globalization.LocaleID.RTL_LANGUAGES)
 	@:noCompletion private function set_language(value:String):String
 	{
@@ -3315,7 +3339,8 @@ class TextField extends InteractiveObject
 		stage.removeEventListener(MouseEvent.MOUSE_MOVE, stage_onMouseMove);
 		stage.removeEventListener(MouseEvent.MOUSE_UP, stage_onMouseUp);
 
-		if (this.stage == null) return;
+		if (this.stage != stage) return;
+
 		if (stage.focus == this)
 		{
 			__getWorldTransform();
@@ -3392,7 +3417,7 @@ class TextField extends InteractiveObject
 		#if (lime && !openfl_doc_gen)
 		if (selectable && type != INPUT && event.keyCode == Keyboard.C && (event.commandKey || event.ctrlKey))
 		{
-			if (__caretIndex != __selectionIndex)
+			if (__caretIndex != __selectionIndex && !displayAsPassword)
 			{
 				Clipboard.text = __text.substring(__caretIndex, __selectionIndex);
 			}
@@ -3486,6 +3511,9 @@ class TextField extends InteractiveObject
 	#if lime
 	@:noCompletion private function window_onKeyDown(key:KeyCode, modifier:KeyModifier):Void
 	{
+		inline function isModifierPressed()
+			return #if mac modifier.metaKey #elseif js(modifier.metaKey || modifier.ctrlKey) #else (modifier.ctrlKey && !modifier.altKey) #end;
+
 		switch (key)
 		{
 			case RETURN, NUMPAD_ENTER:
@@ -3547,7 +3575,7 @@ class TextField extends InteractiveObject
 				}
 
 			case LEFT if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					if (textDirection.forward)
 					{
@@ -3578,7 +3606,7 @@ class TextField extends InteractiveObject
 				setSelection(__selectionIndex, __caretIndex);
 
 			case RIGHT if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					if (textDirection.forward)
 					{
@@ -3609,7 +3637,7 @@ class TextField extends InteractiveObject
 				setSelection(__selectionIndex, __caretIndex);
 
 			case DOWN if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					__caretIndex = __text.length;
 				}
@@ -3626,7 +3654,7 @@ class TextField extends InteractiveObject
 				setSelection(__selectionIndex, __caretIndex);
 
 			case UP if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					__caretIndex = 0;
 				}
@@ -3643,7 +3671,7 @@ class TextField extends InteractiveObject
 				setSelection(__selectionIndex, __caretIndex);
 
 			case HOME if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					__caretIndex = 0;
 				}
@@ -3660,7 +3688,7 @@ class TextField extends InteractiveObject
 				setSelection(__selectionIndex, __caretIndex);
 
 			case END if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					__caretIndex = __text.length;
 				}
@@ -3678,9 +3706,9 @@ class TextField extends InteractiveObject
 
 			case C:
 				#if lime
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
-					if (__caretIndex != __selectionIndex)
+					if (__caretIndex != __selectionIndex && !displayAsPassword)
 					{
 						Clipboard.text = __text.substring(__caretIndex, __selectionIndex);
 					}
@@ -3689,9 +3717,9 @@ class TextField extends InteractiveObject
 
 			case X:
 				#if lime
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
-					if (__caretIndex != __selectionIndex)
+					if (__caretIndex != __selectionIndex && !displayAsPassword)
 					{
 						Clipboard.text = __text.substring(__caretIndex, __selectionIndex);
 
@@ -3704,7 +3732,7 @@ class TextField extends InteractiveObject
 			#if !js
 			case V:
 				#if lime
-				if (#if mac modifier.metaKey #else modifier.ctrlKey #end)
+				if (#if mac modifier.metaKey #else modifier.ctrlKey && !modifier.altKey #end)
 				{
 					if (Clipboard.text != null)
 					{
@@ -3729,7 +3757,7 @@ class TextField extends InteractiveObject
 			#end
 
 			case A if (selectable):
-				if (#if mac modifier.metaKey #elseif js modifier.metaKey || modifier.ctrlKey #else modifier.ctrlKey #end)
+				if (isModifierPressed())
 				{
 					setSelection(0, __text.length);
 				}

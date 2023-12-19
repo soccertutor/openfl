@@ -2,9 +2,8 @@ package openfl.filesystem;
 
 #if (!flash && sys)
 import haxe.io.Path;
-import lime.system.BackgroundWorker;
 import lime.system.System;
-import lime.ui.FileDialog;
+import openfl.desktop.Icon;
 import openfl.errors.IllegalOperationError;
 import openfl.errors.ArgumentError;
 import openfl.errors.Error;
@@ -15,6 +14,14 @@ import openfl.events.FileListEvent;
 import openfl.net.FileReference;
 import sys.FileSystem;
 import sys.io.Process;
+#if (lime && !macro)
+import lime.ui.FileDialog;
+#end
+#if (lime >= "8.2.0")
+import lime.system.ThreadPool;
+#else
+import lime.system.BackgroundWorker;
+#end
 
 @:noCompletion private typedef HaxeFile = sys.io.File;
 
@@ -224,8 +231,13 @@ class File extends FileReference
 	**/
 	public var exists(get, never):Bool;
 
-	// public var icon:Icon;
-	// TODO
+	/**
+		An Icon object containing the icons defined for the file. An Icon object
+		is an array of BitmapData objects corresponding to the various icon
+		states. On Linux, the Icon object contains no icons. On Android, the
+		`icon` property is `null`.
+	**/
+	public var icon(default, never):Icon = null;
 
 	/**
 		Indicates whether the reference is to a directory.  The value is true if the File object points to a directory; false otherwise.
@@ -270,8 +282,16 @@ class File extends FileReference
 	// TODO
 	// public var isSymbolicLink:Bool;
 	// TODO
-	// public static var lineEnding:String;
-	// TODO: platform specific
+
+	/**
+		The line-ending character sequence used by the host operating system.
+
+		On Mac OS and Linux, this is the line-feed character (character code
+		`0x0A` hexadecimal). On Windows, this is the carriage return character
+		(character code `0x0D` hexadecimal) followed by the line-feed character
+		(character code `0x0A` hexadecimal).
+	**/
+	public static var lineEnding(get, never):String;
 
 	/**
 		The full path in the host operating system representation. On Mac OS and Linux, the forward
@@ -333,8 +353,20 @@ class File extends FileReference
 	// TODO
 	// public var preventBackup:Bool;
 	// TODO
-	// public static var seperator:String;
-	// TODO: patform specific
+
+	/**
+		The host operating system's path component separator character.
+
+		On Mac OS and Linux, this is the forward slash (`/`) character. On
+		Windows, it is the backslash (`\`) character.
+
+		Note: When using the backslash character in a String literal, remember
+		to type the character twice (as in `"directory\\file.ext"`). Each pair
+		of backslashes in a String literal represent a single backslash in the
+		String.
+	**/
+	public static var separator(get, never):String;
+
 	// public var spaceAvailable:Float;
 	// TODO
 	// public static var systemCharset:String;
@@ -382,8 +414,8 @@ class File extends FileReference
 		];
 		#end
 
-	@:noCompletion private var __fileDialog:FileDialog;
-	@:noCompletion private var __fileWorker:BackgroundWorker;
+	@:noCompletion private var __fileDialog:#if (lime && !macro) FileDialog #else Dynamic #end;
+	@:noCompletion private var __fileWorker:#if (lime >= "8.2.0") ThreadPool #else BackgroundWorker #end;
 	@:noCompletion private var __sep:String = #if windows "\\" #else "/" #end;
 	@:noCompletion private var __fileStatsDirty:Bool = false;
 
@@ -493,10 +525,12 @@ class File extends FileReference
 		{
 			throw new IllegalOperationError("File Dialog is already open.");
 		}
+		#if (lime && !macro)
 		__fileDialog = new FileDialog();
 		__fileDialog.onSelect.add(__dispatchSelect, true);
 		__fileDialog.onCancel.add(__dispatchCancel);
 		__fileDialog.browse(OPEN_DIRECTORY, null, __path, title);
+		#end
 	}
 
 	/**
@@ -553,11 +587,12 @@ class File extends FileReference
 		{
 			throw new IllegalOperationError("File Dialog is already open.");
 		}
-
+		#if (lime && !macro)
 		__fileDialog = new FileDialog();
 		__fileDialog.onSelect.add(__dispatchSelect, true);
 		__fileDialog.onCancel.add(__dispatchCancel);
 		__fileDialog.browse(OPEN, __getFilterTypes(typeFilter), __path, title);
+		#end
 	}
 
 	/**
@@ -613,11 +648,12 @@ class File extends FileReference
 		{
 			throw new IllegalOperationError("File Dialog is already open.");
 		}
-
+		#if (lime && !macro)
 		__fileDialog = new FileDialog();
 		__fileDialog.onSelectMultiple.add(__dispatchSelectMultiple, true);
 		__fileDialog.onCancel.add(__dispatchCancel);
 		__fileDialog.browse(OPEN_MULTIPLE, __getFilterTypes(typeFilter), __path, title);
+		#end
 	}
 
 	/**
@@ -676,10 +712,11 @@ class File extends FileReference
 		{
 			throw new IllegalOperationError("File Dialog is already open.");
 		}
-
+		#if (lime && !macro)
 		__fileDialog = new FileDialog();
 		__fileDialog.onSelect.add(__dispatchSelect, true);
 		__fileDialog.browse(SAVE, null, __path, title);
+		#end
 	}
 
 	/**
@@ -914,8 +951,17 @@ class File extends FileReference
 	**/
 	public function copyToAsync(newLocation:FileReference, overwrite:Bool = false):Void
 	{
-		__fileWorker = new BackgroundWorker();
-
+		__fileWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
+		__fileWorker.onError.add(function(e:Dynamic):Void
+		{
+			__fileWorker = null;
+			throw e;
+		});
+		__fileWorker.onComplete.add(function(event:Event):Void
+		{
+			__fileWorker = null;
+			dispatchEvent(event);
+		});
 		__fileWorker.doWork.add(function(m:Dynamic)
 		{
 			try
@@ -924,17 +970,20 @@ class File extends FileReference
 			}
 			catch (e:Dynamic)
 			{
-				__fileWorker.cancel();
-				__fileWorker = null;
-
-				__dispatchIoError(e);
+				var ioErrorEvent = __createIoErrorEvent(e);
+				if (ioErrorEvent != null)
+				{
+					__fileWorker.sendComplete(ioErrorEvent);
+				}
+				else
+				{
+					__fileWorker.sendError(e);
+				}
 				return;
 			}
-
-			dispatchEvent(new Event(Event.COMPLETE));
-
-			__fileWorker.cancel();
-			__fileWorker = null;
+			// don't dispatch events directly from doWork because the listeners
+			// will be called in the wrong thread
+			__fileWorker.sendComplete(new Event(Event.COMPLETE));
 		});
 
 		__fileWorker.run();
@@ -1025,8 +1074,17 @@ class File extends FileReference
 	**/
 	public function deleteDirectoryAsync(deleteDirectoryContents:Bool = false):Void
 	{
-		__fileWorker = new BackgroundWorker();
-
+		__fileWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
+		__fileWorker.onError.add(function(e:Dynamic):Void
+		{
+			__fileWorker = null;
+			throw e;
+		});
+		__fileWorker.onComplete.add(function(event:Event):Void
+		{
+			__fileWorker = null;
+			dispatchEvent(event);
+		});
 		__fileWorker.doWork.add(function(m:Dynamic)
 		{
 			try
@@ -1035,17 +1093,20 @@ class File extends FileReference
 			}
 			catch (e:Dynamic)
 			{
-				__fileWorker.cancel();
-				__fileWorker = null;
-
-				__dispatchIoError(e);
+				var ioErrorEvent = __createIoErrorEvent(e);
+				if (ioErrorEvent != null)
+				{
+					__fileWorker.sendComplete(ioErrorEvent);
+				}
+				else
+				{
+					__fileWorker.sendError(e);
+				}
 				return;
 			}
-
-			dispatchEvent(new Event(Event.COMPLETE));
-
-			__fileWorker.cancel();
-			__fileWorker = null;
+			// don't dispatch events directly from doWork because the listeners
+			// will be called in the wrong thread
+			__fileWorker.sendComplete(new Event(Event.COMPLETE));
 		});
 
 		__fileWorker.run();
@@ -1084,8 +1145,17 @@ class File extends FileReference
 	**/
 	public function deleteFileAsync():Void
 	{
-		__fileWorker = new BackgroundWorker();
-
+		__fileWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
+		__fileWorker.onError.add(function(e:Dynamic):Void
+		{
+			__fileWorker = null;
+			throw e;
+		});
+		__fileWorker.onComplete.add(function(event:Event):Void
+		{
+			__fileWorker = null;
+			dispatchEvent(event);
+		});
 		__fileWorker.doWork.add(function(m:Dynamic)
 		{
 			try
@@ -1094,17 +1164,20 @@ class File extends FileReference
 			}
 			catch (e:Dynamic)
 			{
-				__fileWorker.cancel();
-				__fileWorker = null;
-
-				__dispatchIoError(e);
+				var ioErrorEvent = __createIoErrorEvent(e);
+				if (ioErrorEvent != null)
+				{
+					__fileWorker.sendComplete(ioErrorEvent);
+				}
+				else
+				{
+					__fileWorker.sendError(e);
+				}
 				return;
 			}
-
-			dispatchEvent(new Event(Event.COMPLETE));
-
-			__fileWorker.cancel();
-			__fileWorker = null;
+			// don't dispatch events directly from doWork because the listeners
+			// will be called in the wrong thread
+			__fileWorker.sendComplete(new Event(Event.COMPLETE));
 		});
 
 		__fileWorker.run();
@@ -1182,21 +1255,45 @@ class File extends FileReference
 			throw new Error("Not a directory.", 3007);
 		}
 
-		__fileWorker = new BackgroundWorker();
+		__fileWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
+		__fileWorker.onError.add(function(e:Dynamic):Void
+		{
+			__fileWorker = null;
+			throw e;
+		});
+		__fileWorker.onComplete.add(function(event:FileListEvent):Void
+		{
+			__fileWorker = null;
+			dispatchEvent(event);
+		});
 		__fileWorker.doWork.add(function(m:Dynamic)
 		{
-			var directories:Array<String> = FileSystem.readDirectory(__path);
+			var directories:Array<String> = null;
+			try
+			{
+				directories = FileSystem.readDirectory(__path);
+			}
+			catch (e:Dynamic)
+			{
+				var ioErrorEvent = __createIoErrorEvent(e);
+				if (ioErrorEvent != null)
+				{
+					__fileWorker.sendComplete(ioErrorEvent);
+				}
+				else
+				{
+					__fileWorker.sendError(e);
+				}
+				return;
+			}
 			var files:Array<File> = [];
-
 			for (directory in directories)
 			{
 				files.push(new File(__path + directory));
 			}
-
-			dispatchEvent(new FileListEvent(FileListEvent.DIRECTORY_LISTING, files));
-
-			__fileWorker.cancel();
-			__fileWorker = null;
+			// don't dispatch events directly from doWork because the listeners
+			// will be called in the wrong thread
+			__fileWorker.sendComplete(new FileListEvent(FileListEvent.DIRECTORY_LISTING, files));
 		});
 
 		__fileWorker.run();
@@ -1429,8 +1526,17 @@ class File extends FileReference
 	**/
 	public function moveToAsync(newLocation:FileReference, overwrite:Bool = false):Void
 	{
-		__fileWorker = new BackgroundWorker();
-
+		__fileWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
+		__fileWorker.onError.add(function(e:Dynamic):Void
+		{
+			__fileWorker = null;
+			throw e;
+		});
+		__fileWorker.onComplete.add(function(event:Event):Void
+		{
+			__fileWorker = null;
+			dispatchEvent(event);
+		});
 		__fileWorker.doWork.add(function(m:Dynamic)
 		{
 			try
@@ -1439,17 +1545,20 @@ class File extends FileReference
 			}
 			catch (e:Dynamic)
 			{
-				__fileWorker.cancel();
-				__fileWorker = null;
-
-				__dispatchIoError(e);
+				var ioErrorEvent = __createIoErrorEvent(e);
+				if (ioErrorEvent != null)
+				{
+					__fileWorker.sendComplete(ioErrorEvent);
+				}
+				else
+				{
+					__fileWorker.sendError(e);
+				}
 				return;
 			}
-
-			dispatchEvent(new Event(Event.COMPLETE));
-
-			__fileWorker.cancel();
-			__fileWorker = null;
+			// don't dispatch events directly from doWork because the listeners
+			// will be called in the wrong thread
+			__fileWorker.sendComplete(new Event(Event.COMPLETE));
 		});
 
 		__fileWorker.run();
@@ -1650,25 +1759,21 @@ class File extends FileReference
 		this.dispatchEvent(new FileListEvent(FileListEvent.SELECT_MULTIPLE, files));
 	}
 
-	@:noCompletion private function __dispatchIoError(e:Dynamic):Void
+	@:noCompletion private function __createIoErrorEvent(e:Dynamic):IOErrorEvent
 	{
 		if (hasEventListener(IOErrorEvent.IO_ERROR))
 		{
 			if (#if (haxe_ver >= 4.2) Std.isOfType #else Std.is #end (e, Error))
 			{
 				var error = (e : Error);
-				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error.message, error.errorID));
+				return new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, error.message, error.errorID);
 			}
 			else
 			{
-				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR));
+				return new IOErrorEvent(IOErrorEvent.IO_ERROR);
 			}
 		}
-		else
-		{
-			// if there's no listener, throw it again
-			throw e;
-		}
+		return null;
 	}
 
 	@:noCompletion private function __formatPath(path:String):String
@@ -1765,6 +1870,37 @@ class File extends FileReference
 		return tempPath + ".tmp";
 	}
 
+	#if windows
+	@:noCompletion private function __replaceWindowsEnvVars(path:String):String
+	{
+		// Define the regular expression to match the path component to be replaced
+		var pattern:EReg = ~/%(.+?)%/;
+
+		// Find the first match of the regular expression in the path
+		var match:Bool = pattern.match(path);
+
+		if (match)
+		{
+			// Extract the matched path component
+			var matchedPath:String = pattern.matched(0);
+
+			// Get the environment variable name by removing the first and last characters ("%")
+			var envVar:String = matchedPath.substring(1, matchedPath.length - 1);
+
+			// Get the value of the environment variable
+			var envVarValue:Null<String> = Sys.getEnv(envVar);
+
+			if (envVarValue == null)
+			{
+				return path;
+			}
+			// Replace the matched path component with the environment variable value
+			return StringTools.replace(path, matchedPath, envVarValue);
+		}
+		return path;
+	}
+	#end
+
 	@:noCompletion private function __winGetHiddenAttr():Bool
 	{
 		// TODO don't use the command line for this.... instead we should add support in Lime to use
@@ -1839,6 +1975,15 @@ class File extends FileReference
 		return creationDate;
 	}
 
+	@:noCompletion private static function get_lineEnding():String
+	{
+		#if windows
+		return "\r\n";
+		#else
+		return "\n";
+		#end
+	}
+
 	@:noCompletion override private function get_modificationDate():Date
 	{
 		if (__fileStatsDirty)
@@ -1857,7 +2002,16 @@ class File extends FileReference
 		return name;
 	}
 
-	@:noCompletion override private function get_size():Int
+	@:noCompletion private static function get_separator():String
+	{
+		#if windows
+		return "\\";
+		#else
+		return "/";
+		#end
+	}
+
+	@:noCompletion override private function get_size():Float
 	{
 		if (__fileStatsDirty)
 		{
@@ -1882,6 +2036,12 @@ class File extends FileReference
 
 	@:noCompletion private function set_nativePath(path:String):String
 	{
+		#if windows
+		if (path.indexOf("%") > -1)
+		{
+			path = __replaceWindowsEnvVars(path);
+		}
+		#end
 		if (path.charAt(path.length - 1) == ":" /*|| FileSystem.isDirectory(path)*/)
 		{
 			path = Path.addTrailingSlash(path);

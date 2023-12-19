@@ -1,6 +1,6 @@
 package openfl.filesystem;
 
-#if (!flash && sys)
+#if (haxe4 && sys && !flash)
 import haxe.Json;
 import haxe.Serializer;
 import haxe.Timer;
@@ -10,7 +10,6 @@ import haxe.io.BytesOutput;
 import haxe.io.Encoding;
 import haxe.io.Bytes;
 import haxe.io.Path;
-import lime.system.BackgroundWorker;
 import openfl.errors.Error;
 import openfl.events.Event;
 import openfl.events.EventDispatcher;
@@ -30,6 +29,11 @@ import sys.io.FileInput;
 import sys.io.FileOutput;
 import sys.io.FileSeek;
 import sys.thread.Mutex;
+#if (lime >= "8.2.0")
+import lime.system.ThreadPool;
+#else
+import lime.system.BackgroundWorker;
+#end
 #if format
 import format.amf.Reader as AMFReader;
 import format.amf.Writer as AMFWriter;
@@ -152,7 +156,7 @@ class FileStream extends EventDispatcher implements IDataInput implements IDataO
 	@:noCompletion private var __output:FileOutput;
 	@:noCompletion private var __fileMode:FileMode;
 	@:noCompletion private var __file:File;
-	@:noCompletion private var __fileStreamWorker:BackgroundWorker;
+	@:noCompletion private var __fileStreamWorker:#if (lime >= "8.2.0") ThreadPool #else BackgroundWorker #end;
 	@:noCompletion private var __isOpen:Bool;
 	@:noCompletion private var __isWrite:Bool;
 	@:noCompletion private var __isAsync:Bool;
@@ -339,7 +343,7 @@ class FileStream extends EventDispatcher implements IDataInput implements IDataO
 
 		__fileStreamMutex = new Mutex();
 
-		__fileStreamWorker = new BackgroundWorker();
+		__fileStreamWorker = #if (lime >= "8.2.0") new ThreadPool() #else new BackgroundWorker() #end;
 
 		__fileStreamWorker.onProgress.add(function(e:Event)
 		{
@@ -366,7 +370,7 @@ class FileStream extends EventDispatcher implements IDataInput implements IDataO
 
 		if (fileMode == READ)
 		{
-			__buffer = new ByteArray(file.size);
+			__buffer = new ByteArray(Std.int(file.size));
 			__fileStreamWorker.doWork.add(function(m:Dynamic)
 			{
 				var inputBytesAvailable:Int = 0;
@@ -1625,7 +1629,7 @@ class FileStream extends EventDispatcher implements IDataInput implements IDataO
 		return position = value;
 	}
 }
-#else
+#elseif flash
 #if air
 typedef FileStream = flash.filesystem.FileStream;
 #end

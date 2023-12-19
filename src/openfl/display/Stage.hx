@@ -187,6 +187,7 @@ typedef Element = Dynamic;
 @:access(openfl.ui.GameInput)
 @:access(openfl.ui.Keyboard)
 @:access(openfl.ui.Mouse)
+@:access(lime.ui.Window)
 class Stage extends DisplayObjectContainer #if lime implements IModule #end
 {
 	/**
@@ -794,6 +795,13 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		The associated Lime Window instance for this Stage.
 	**/
 	public var window(default, null):Window;
+
+	#if sys
+	/**
+
+	**/
+	public var nativeWindow(default, null):openfl.display.NativeWindow;
+	#end
 
 	/**
 		Indicates whether GPU compositing is available and in use. The
@@ -1530,6 +1538,7 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 		MouseEvent.__altKey = modifier.altKey;
 		MouseEvent.__commandKey = modifier.metaKey;
+		MouseEvent.__controlKey = modifier.ctrlKey && !modifier.metaKey;
 		MouseEvent.__ctrlKey = modifier.ctrlKey;
 		MouseEvent.__shiftKey = modifier.shiftKey;
 
@@ -1574,6 +1583,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 					#end
 
 					__dispatchStack(clickEvent, stack);
+
+					if (clickEvent.__updateAfterEventFlag)
+					{
+						__renderAfterEvent();
+					}
 
 					#if openfl_pool_events
 					MouseEvent.__pool.release(clickEvent);
@@ -1757,6 +1771,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 				}
 
 				// TODO: handle arrow keys changing the focus
+			}
+
+			if (event.__updateAfterEventFlag)
+			{
+				__renderAfterEvent();
 			}
 		}
 	}
@@ -2008,49 +2027,26 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		}
 	}
 
-	@:noCompletion private function __onLimeRender(context:RenderContext):Void
+	@:noCompletion private function __renderAfterEvent():Void
 	{
-		if (__rendering) return;
-		__rendering = true;
-
-		#if hxtelemetry
-		Telemetry.__advanceFrame();
+		#if (cpp || hl || neko)
+		// TODO: should Lime have a public API to force rendering?
+		window.__backend.render();
 		#end
-
-		#if gl_stats
-		Context3DStats.resetDrawCalls();
+		var cancelled = __render(window.context);
+		#if (cpp || hl || neko)
+		if (!cancelled)
+		{
+			window.__backend.contextFlip();
+		}
 		#end
+	}
 
-		var event = null;
+	@:noCompletion private function __render(context:RenderContext):Bool
+	{
+		var cancelled = false;
 
-		#if openfl_pool_events
-		event = Event.__pool.get();
-		event.type = Event.ENTER_FRAME;
-
-		__broadcastEvent(event);
-
-		Event.__pool.release(event);
-		event = Event.__pool.get();
-		event.type = Event.FRAME_CONSTRUCTED;
-
-		__broadcastEvent(event);
-
-		Event.__pool.release(event);
-		event = Event.__pool.get();
-		event.type = Event.EXIT_FRAME;
-
-		__broadcastEvent(event);
-
-		Event.__pool.release(event);
-		#else
-		__broadcastEvent(new Event(Event.ENTER_FRAME));
-		__broadcastEvent(new Event(Event.FRAME_CONSTRUCTED));
-		__broadcastEvent(new Event(Event.EXIT_FRAME));
-		#end
-
-		__renderable = true;
-		__enterFrame(__deltaTime);
-		__deltaTime = 0;
+		var event:Event = null;
 
 		var shouldRender = #if !openfl_disable_display_render (__renderer != null #if !openfl_always_render && (__renderDirty || __forceRender) #end) #else false #end;
 
@@ -2112,14 +2108,14 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			}
 			else if (context3D == null)
 			{
-				window.onRender.cancel();
+				cancelled = true;
 			}
 
 			if (context3D != null)
 			{
 				if (!context3D.__present)
 				{
-					window.onRender.cancel();
+					cancelled = true;
 				}
 				else
 				{
@@ -2141,6 +2137,59 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		Telemetry.__endTiming(TelemetryCommandName.RENDER);
 		Telemetry.__rewindStack(stack);
 		#end
+
+		return cancelled;
+	}
+
+	@:noCompletion private function __onLimeRender(context:RenderContext):Void
+	{
+		if (__rendering) return;
+		__rendering = true;
+
+		#if hxtelemetry
+		Telemetry.__advanceFrame();
+		#end
+
+		#if gl_stats
+		Context3DStats.resetDrawCalls();
+		#end
+
+		var event:Event = null;
+
+		#if openfl_pool_events
+		event = Event.__pool.get();
+		event.type = Event.ENTER_FRAME;
+
+		__broadcastEvent(event);
+
+		Event.__pool.release(event);
+		event = Event.__pool.get();
+		event.type = Event.FRAME_CONSTRUCTED;
+
+		__broadcastEvent(event);
+
+		Event.__pool.release(event);
+		event = Event.__pool.get();
+		event.type = Event.EXIT_FRAME;
+
+		__broadcastEvent(event);
+
+		Event.__pool.release(event);
+		#else
+		__broadcastEvent(new Event(Event.ENTER_FRAME));
+		__broadcastEvent(new Event(Event.FRAME_CONSTRUCTED));
+		__broadcastEvent(new Event(Event.EXIT_FRAME));
+		#end
+
+		__renderable = true;
+		__enterFrame(__deltaTime);
+		__deltaTime = 0;
+
+		var cancelled = __render(context);
+		if (cancelled)
+		{
+			window.onRender.cancel();
+		}
 
 		__rendering = false;
 	}
@@ -2601,6 +2650,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 		__dispatchStack(event, stack);
 
+		if (event.__updateAfterEventFlag)
+		{
+			__renderAfterEvent();
+		}
+
 		#if openfl_pool_events
 		MouseEvent.__pool.release(event);
 		#end
@@ -2621,6 +2675,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			#end
 
 			__dispatchStack(event, stack);
+
+			if (event.__updateAfterEventFlag)
+			{
+				__renderAfterEvent();
+			}
 
 			#if openfl_pool_events
 			MouseEvent.__pool.release(event);
@@ -2645,6 +2704,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 					#end
 
 					__dispatchStack(event, stack);
+
+					if (event.__updateAfterEventFlag)
+					{
+						__renderAfterEvent();
+					}
 
 					#if openfl_pool_events
 					MouseEvent.__pool.release(event);
@@ -2711,6 +2775,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 				__dispatchStack(event, __mouseOutStack);
 
+				if (event.__updateAfterEventFlag)
+				{
+					__renderAfterEvent();
+				}
+
 				#if openfl_pool_events
 				MouseEvent.__pool.release(cast event);
 				#end
@@ -2741,6 +2810,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 				event.bubbles = false;
 
 				__dispatchTarget(item, event);
+
+				if (event.__updateAfterEventFlag)
+				{
+					__renderAfterEvent();
+				}
 
 				#if openfl_pool_events
 				MouseEvent.__pool.release(cast event);
@@ -2776,6 +2850,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 					__dispatchTarget(item, event);
 
+					if (event.__updateAfterEventFlag)
+					{
+						__renderAfterEvent();
+					}
+
 					#if openfl_pool_events
 					MouseEvent.__pool.release(cast event);
 					#end
@@ -2807,6 +2886,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 				#end
 
 				__dispatchStack(event, stack);
+
+				if (event.__updateAfterEventFlag)
+				{
+					__renderAfterEvent();
+				}
 
 				#if openfl_pool_events
 				MouseEvent.__pool.release(cast event);
@@ -2883,6 +2967,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 		__dispatchStack(event, stack);
 		if (event.isDefaultPrevented()) window.onMouseWheel.cancel();
 
+		if (event.__updateAfterEventFlag)
+		{
+			__renderAfterEvent();
+		}
+
 		Point.__pool.release(targetPoint);
 	}
 	#end
@@ -2955,6 +3044,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 
 		__dispatchStack(touchEvent, stack);
 
+		if (touchEvent.__updateAfterEventFlag)
+		{
+			__renderAfterEvent();
+		}
+
 		if (touchType != null)
 		{
 			touchEvent = TouchEvent.__create(touchType, null, touchX, touchY, target.__globalToLocal(targetPoint, localPoint), cast target);
@@ -2963,6 +3057,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			touchEvent.pressure = touch.pressure;
 
 			__dispatchStack(touchEvent, stack);
+
+			if (touchEvent.__updateAfterEventFlag)
+			{
+				__renderAfterEvent();
+			}
 		}
 
 		var touchOverTarget = touchData.touchOverTarget;
@@ -2976,6 +3075,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 			touchEvent.pressure = touch.pressure;
 
 			__dispatchTarget(touchOverTarget, touchEvent);
+
+			if (touchEvent.__updateAfterEventFlag)
+			{
+				__renderAfterEvent();
+			}
 		}
 
 		var touchOutStack = touchData.rollOutStack;
@@ -2995,6 +3099,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 				touchEvent.pressure = touch.pressure;
 
 				__dispatchTarget(item, touchEvent);
+
+				if (touchEvent.__updateAfterEventFlag)
+				{
+					__renderAfterEvent();
+				}
 			}
 			else
 			{
@@ -3016,6 +3125,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 					touchEvent.pressure = touch.pressure;
 
 					__dispatchTarget(item, touchEvent);
+
+					if (touchEvent.__updateAfterEventFlag)
+					{
+						__renderAfterEvent();
+					}
 				}
 
 				if (item.hasEventListener(TouchEvent.TOUCH_ROLL_OUT))
@@ -3036,6 +3150,11 @@ class Stage extends DisplayObjectContainer #if lime implements IModule #end
 				touchEvent.pressure = touch.pressure;
 
 				__dispatchTarget(target, touchEvent);
+
+				if (touchEvent.__updateAfterEventFlag)
+				{
+					__renderAfterEvent();
+				}
 			}
 
 			touchData.touchOverTarget = target;

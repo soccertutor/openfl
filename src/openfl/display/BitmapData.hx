@@ -149,8 +149,10 @@ class BitmapData implements IBitmapDrawable
 	/**
 		Defines whether the bitmap image is readable. Hardware-only bitmap images
 		do not support `getPixels`, `setPixels` and other
-		BitmapData methods, though they can still be used inside a Bitmap object
-		or other display objects that do not need to modify the pixels.
+		BitmapData methods, nor may they be used with
+		`Graphics.beginBitmapFill`. However, hardware-only bitmap images may
+		still be used inside a Bitmap object or other display objects that do
+		not need to modify the pixels.
 
 		As an exception to the rule, `bitmapData.draw` is supported for
 		non-readable bitmap images.
@@ -866,6 +868,18 @@ class BitmapData implements IBitmapDrawable
 	{
 		if (source == null) return;
 
+		var wasVisible = true;
+		var sourceAsDisplayObject:DisplayObject = null;
+		if (#if (haxe_ver >= 4.2) Std.isOfType #else Std.is #end (source, DisplayObject))
+		{
+			sourceAsDisplayObject = cast(source, DisplayObject);
+			if (!sourceAsDisplayObject.visible)
+			{
+				wasVisible = false;
+				sourceAsDisplayObject.visible = true;
+			}
+		}
+
 		source.__update(false, true);
 
 		var transform = Matrix.__pool.get();
@@ -906,6 +920,7 @@ class BitmapData implements IBitmapDrawable
 
 			var renderer = new OpenGLRenderer(Lib.current.stage.context3D, this);
 			renderer.__allowSmoothing = smoothing;
+			renderer.__pixelRatio = #if openfl_disable_hdpi 1 #else Lib.current.stage.window.scale #end;
 			renderer.__overrideBlendMode = blendMode;
 
 			renderer.__worldTransform = transform;
@@ -993,6 +1008,11 @@ class BitmapData implements IBitmapDrawable
 		}
 
 		Matrix.__pool.release(transform);
+
+		if (sourceAsDisplayObject != null && !wasVisible)
+		{
+			sourceAsDisplayObject.visible = false;
+		}
 	}
 
 	/**
@@ -1306,12 +1326,16 @@ class BitmapData implements IBitmapDrawable
 	/**
 		**BETA**
 
-		Creates a new BitmapData instance from a Stage3D rectangle texture.
+		Creates a new BitmapData instance from a Stage3D rectangle texture. The
+		BitmapData instance will hardware-only, and the `readable` property will
+		be false, meaning that some operations will not be permitted.
 
 		This method is not supported by the Flash target.
 
 		@param	texture	A Texture or RectangleTexture instance
 		@returns	A new BitmapData if successful, or `null` if unsuccessful
+
+		@see `BitmapData.readable`
 	**/
 	public static function fromTexture(texture:TextureBase):BitmapData
 	{

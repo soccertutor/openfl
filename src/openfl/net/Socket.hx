@@ -154,6 +154,18 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 	**/
 	public var connected(get, never):Bool;
 
+	#if sys
+	/**
+	 * The IP address this socket is bound to on the local machine.
+	**/
+	public var localAddress(get, never):String;
+
+	/**
+		The port this socket is bound to on the local machine.
+	 */
+	public var localPort(get, never):Int;
+	#end
+
 	/**
 		Indicates the byte order for the data. Possible values are constants
 		from the openfl.utils.Endian class, `Endian.BIG_ENDIAN` or
@@ -167,6 +179,24 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 		Controls the version of AMF used when writing or reading an object.
 	**/
 	public var objectEncoding:ObjectEncoding;
+
+	#if sys
+	/**
+		The IP address of the remote machine to which this socket is connected.
+
+		You can use this property to determine the IP address of a client socket
+		dispatched in a ServerSocketConnectEvent by a ServerSocket object.
+	 */
+	public var remoteAddress(get, never):String;
+
+	/**
+		The port on the remote machine to which this socket is connected.
+
+		You can use this property to determine the port number of a client socket
+		dispatched in a ServerSocketConnectEvent by a ServerSocket object.
+	 */
+	public var remotePort(get, never):Int;
+	#end
 
 	@SuppressWarnings("checkstyle:FieldDocComment")
 	@:noCompletion @:dox(hide) public var secure:Bool;
@@ -198,7 +228,7 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 			"endian": {
 				get: untyped #if haxe4 js.Syntax.code #else __js__ #end ("function () { return this.get_endian (); }"),
 				set: untyped #if haxe4 js.Syntax.code #else __js__ #end ("function (v) { return this.set_endian (v); }")
-			},
+			}
 		});
 	}
 	#end
@@ -340,7 +370,7 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 							 href="http://www.adobe.com/go/devnet_security_en"
 							 scope="external">Security</a>.
 	**/
-	public function connect(host:String = null, port:Int = 0):Void
+	public function connect(host:String, port:Int):Void
 	{
 		if (__socket != null)
 		{
@@ -398,7 +428,15 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 		__socket.onclose = socket_onClose;
 		__socket.onerror = socket_onError;
 		#else
-		__socket = new SysSocket();
+		try
+		{
+			__socket = new SysSocket();
+		}
+		catch (e:Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, true, false, "Connection failed"));
+			return;
+		}
 
 		try
 		{
@@ -1061,13 +1099,24 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 
 		if (!connected)
 		{
-			var r = SysSocket.select(null, [__socket], null, 0);
-
-			if (r.write[0] == __socket)
+			try
 			{
-				doConnect = true;
+				var r = SysSocket.select(null, [__socket], null, 0);
+				if (r.write[0] == __socket)
+				{
+					doConnect = true;
+				}
+				else if (Sys.time() - __timestamp > timeout / 1000)
+				{
+					doClose = true;
+				}
+				else
+				{
+					// try again later
+					return;
+				}
 			}
-			else if (Sys.time() - __timestamp > timeout / 1000)
+			catch (e:Dynamic)
 			{
 				doClose = true;
 			}
@@ -1076,7 +1125,24 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 		var b = new BytesBuffer();
 		var bLength = 0;
 
-		if (connected || doConnect)
+		if (doConnect)
+		{
+			try
+			{
+				var peer = __socket.peer();
+				if (peer == null)
+				{
+					// not connected yet (hxcpp and hl)
+					return;
+				}
+			}
+			catch (e:Dynamic)
+			{
+				// not connected yet (neko)
+				return;
+			}
+		}
+		else if (connected)
 		{
 			try
 			{
@@ -1103,7 +1169,11 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 				switch (e)
 				{
 					case Error.Blocked:
-					case Error.Custom(Error.Blocked):
+					case Error.Custom(custom):
+						if (custom != Error.Blocked && custom != "EOF")
+						{
+							doClose = true;
+						}
 					default:
 						doClose = true;
 				}
@@ -1192,6 +1262,28 @@ class Socket extends EventDispatcher implements IDataInput implements IDataOutpu
 
 		return __endian;
 	}
+
+	#if sys
+	@:noCompletion private function get_localAddress():String
+	{
+		return __socket.host().host.host;
+	}
+
+	@:noCompletion private function get_localPort():Int
+	{
+		return __socket.host().port;
+	}
+
+	@:noCompletion private function get_remoteAddress():String
+	{
+		return __socket.peer().host.host;
+	}
+
+	@:noCompletion private function get_remotePort():Int
+	{
+		return __socket.peer().port;
+	}
+	#end
 }
 #else
 typedef Socket = flash.net.Socket;

@@ -171,6 +171,11 @@ class EventDispatcher implements IEventDispatcher
 								inner function(save it in another variable) then
 								it is not garbage-collected and stays
 								persistent.
+
+								Weak references are supported on some OpenFL
+								targets only, including html5, cpp, and
+								flash/air. On other targets, this parameter is
+								ignored, and the reference will be strong instead.
 		@throws ArgumentError The `listener` specified is not a
 							  function.
 	**/
@@ -187,7 +192,7 @@ class EventDispatcher implements IEventDispatcher
 		if (!__eventMap.exists(type))
 		{
 			var list = new Array<Listener>();
-			list.push(new Listener(listener, useCapture, priority));
+			list.push(new Listener(listener, useCapture, priority, useWeakReference));
 
 			var iterator = new DispatchIterator(list);
 
@@ -213,7 +218,7 @@ class EventDispatcher implements IEventDispatcher
 				}
 			}
 
-			__addListenerByPriority(list, new Listener(listener, useCapture, priority));
+			__addListenerByPriority(list, new Listener(listener, useCapture, priority, useWeakReference));
 		}
 	}
 
@@ -398,8 +403,50 @@ class EventDispatcher implements IEventDispatcher
 
 			if (listener.useCapture == capture)
 			{
+				#if (js && html5)
+				if (listener.useWeakReference && listener.weakRefCallback != null)
+				{
+					var weakCallback = listener.weakRefCallback.deref();
+					if (weakCallback == null)
+					{
+						// a weakly referenced callback was garbage collected
+						var indexToRemove = iterator.index - 1;
+						list.splice(indexToRemove, 1);
+						iterator.remove(listener, indexToRemove);
+					}
+					else
+					{
+						weakCallback(event);
+					}
+				}
+				else
+				{
+					listener.callback(event);
+				}
+				#elseif cpp
+				if (listener.useWeakReference)
+				{
+					var weakCallback = listener.weakRefCallback.get();
+					if (weakCallback == null)
+					{
+						// a weakly referenced callback was garbage collected
+						var indexToRemove = iterator.index - 1;
+						list.splice(indexToRemove, 1);
+						iterator.remove(listener, indexToRemove);
+					}
+					else
+					{
+						weakCallback(event);
+					}
+				}
+				else
+				{
+					listener.callback(event);
+				}
+				#else
 				// listener.callback (event.clone ());
 				listener.callback(event);
+				#end
 
 				if (event.__isCanceledNow)
 				{
@@ -537,23 +584,77 @@ class EventDispatcher implements IEventDispatcher
 private class Listener
 {
 	public var callback:Dynamic->Void;
+	#if (js && html5)
+	public var weakRefCallback:Dynamic;
+
+	private static var supportsWeakReference:Bool = Reflect.hasField(js.Lib.global, "WeakRef");
+	#elseif cpp
+	public var weakRefCallback:cpp.vm.WeakRef<Dynamic->Void>;
+	#end
+
 	public var priority:Int;
 	public var useCapture:Bool;
+	public var useWeakReference:Bool;
 
-	public function new(callback:Dynamic->Void, useCapture:Bool, priority:Int)
+	public function new(callback:Dynamic->Void, useCapture:Bool, priority:Int, useWeakReference:Bool)
 	{
+		#if (js && html5)
+		if (useWeakReference && supportsWeakReference)
+		{
+			#if haxe4
+			this.weakRefCallback = untyped js.Syntax.code("new WeakRef({0})", callback);
+			#else
+			this.weakRefCallback = untyped __js__("new WeakRef")(callback);
+			#end
+		}
+		else
+		{
+			this.callback = callback;
+		}
+		#elseif cpp
+		if (useWeakReference)
+		{
+			this.weakRefCallback = new cpp.vm.WeakRef(callback, false);
+		}
+		else
+		{
+			this.callback = callback;
+		}
+		#else
 		this.callback = callback;
+		#end
 		this.useCapture = useCapture;
 		this.priority = priority;
+		this.useWeakReference = useWeakReference;
 	}
 
 	public function match(callback:Dynamic->Void, useCapture:Bool):Bool
 	{
+		var resolvedCallback = this.callback;
+		#if (js && html5)
+		if (weakRefCallback != null)
+		{
+			resolvedCallback = weakRefCallback.deref();
+			if (resolvedCallback == null)
+			{
+				return false;
+			}
+		}
+		#elseif cpp
+		if (weakRefCallback != null)
+		{
+			resolvedCallback = weakRefCallback.get();
+			if (resolvedCallback == null)
+			{
+				return false;
+			}
+		}
+		#end
 		#if hl // https://github.com/HaxeFoundation/hashlink/issues/301
-		return ((Reflect.compareMethods(this.callback, callback) || Reflect.compare(this.callback, callback) == 0)
+		return ((Reflect.compareMethods(resolvedCallback, callback) || Reflect.compare(resolvedCallback, callback) == 0)
 			&& this.useCapture == useCapture);
 		#else
-		return (Reflect.compareMethods(this.callback, callback) && this.useCapture == useCapture);
+		return (Reflect.compareMethods(resolvedCallback, callback) && this.useCapture == useCapture);
 		#end
 	}
 }
