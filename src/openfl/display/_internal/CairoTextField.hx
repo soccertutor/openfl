@@ -308,7 +308,9 @@ class CairoTextField
 					{
 						if (textField.__selectionIndex == textField.__caretIndex)
 						{
-							if (textField.__showCursor && group.startIndex <= textField.__caretIndex && group.endIndex >= textField.__caretIndex)
+							if (textField.__showCursor
+								&& group.startIndex <= textField.__caretIndex
+								&& group.endIndex >= textField.__caretIndex)
 							{
 								advance = 0.0;
 								if (group.textDirection().backward) advance = group.width;
@@ -364,11 +366,9 @@ class CairoTextField
 								selectionEnd = group.endIndex;
 							}
 
-							// this isn't supposed to happen, but better to
-							// avoid a crash if there's a bug somewhere
-							if (glyphs.length < selectionEnd - selectionStart)
+							if (selectionEnd > glyphs.length)
 							{
-								selectionEnd = selectionStart + glyphs.length;
+								selectionEnd = glyphs.length;
 							}
 
 							var start, end;
