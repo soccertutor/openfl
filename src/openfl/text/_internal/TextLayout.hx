@@ -69,9 +69,9 @@ class TextLayout
 	@SuppressWarnings("checkstyle:Dynamic") private var __hbBuffer:#if lime HBBuffer #else Dynamic #end;
 	@SuppressWarnings("checkstyle:Dynamic") private var __hbFont:#if lime HBFTFont #else Dynamic #end;
 
-	public function new(text:String = "", font:Font = null, size:Int = 12, #if (!hl) direction:TextDirection = INVALID, script:TextScript =  GUESS,
-			language:String = "" #else direction:TextDirection = LEFT_TO_RIGHT, script:TextScript = COMMON,
-			language:String = "en"    #end)
+	public function new(text:String = "", font:Font = null, size:Int = 12,
+			#if (!hl) direction:TextDirection = INVALID, script:TextScript = GUESS, language:String = "" #else direction:TextDirection = LEFT_TO_RIGHT,
+		script:TextScript = COMMON, language:String = "en" #end)
 	{
 		this.text = text;
 		this.font = font;
