@@ -166,16 +166,12 @@ class TextLayout
 
 				if (__hbBuffer.script == INVALID)
 				{
-					direction = cast direction.toHBDirection();
+					__direction = cast direction.toHBDirection();
 				}
 				else
 				{
-					direction = cast __hbBuffer.direction;
+					__direction = cast __hbBuffer.direction;
 				}
-
-				// This has to do with a weird bg in Guess mode where the first textLayout repeats itself
-				// instead of "ال صبا صباح"  it writes "ال ال صبا صباح "
-				if (positions.length > 0) return;
 			}
 			#end
 
