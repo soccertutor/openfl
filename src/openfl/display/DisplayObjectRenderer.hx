@@ -468,8 +468,16 @@ class DisplayObjectRenderer extends EventDispatcher
 			else
 			{
 				// Should we retain these longer?
+				// Defensive: __cacheBitmap may be nulled by another thread between
+				// the needRender check and here. Bail out — next pass will recreate.
+				var cacheBitmap = displayObject.__cacheBitmap;
+				if (cacheBitmap == null)
+				{
+					ColorTransform.__pool.release(colorTransform);
+					return false;
+				}
 
-				displayObject.__cacheBitmapData = displayObject.__cacheBitmap.bitmapData;
+				displayObject.__cacheBitmapData = cacheBitmap.bitmapData;
 				displayObject.__cacheBitmapData2 = null;
 				displayObject.__cacheBitmapData3 = null;
 			}
