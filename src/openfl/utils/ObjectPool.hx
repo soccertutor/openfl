@@ -1,7 +1,9 @@
 package openfl.utils;
 
-#if !lime
 import haxe.ds.ObjectMap;
+#if cpp
+import sys.thread.Mutex;
+#end
 
 @SuppressWarnings("checkstyle:FieldDocComment")
 class ObjectPool<T>
@@ -15,10 +17,16 @@ class ObjectPool<T>
 	@:noCompletion private var __inactiveObjectList:List<T>;
 	@:noCompletion private var __pool:Map<T, Bool>;
 	@:noCompletion private var __size:Null<Int>;
+	#if cpp
+	@:noCompletion private var __mutex:Mutex;
+	#end
 
 	public function new(create:Void->T = null, clean:T->Void = null, size:Null<Int> = null)
 	{
 		__pool = cast new ObjectMap();
+		#if cpp
+		__mutex = new Mutex();
+		#end
 
 		activeObjects = 0;
 		inactiveObjects = 0;
@@ -72,6 +80,7 @@ class ObjectPool<T>
 
 	public function get():T
 	{
+		#if cpp __mutex.acquire(); #end
 		var object:T = null;
 
 		if (inactiveObjects > 0)
@@ -89,19 +98,25 @@ class ObjectPool<T>
 			}
 		}
 
+		#if cpp __mutex.release(); #end
 		return object;
 	}
 
 	public function release(object:T):Void
 	{
+		#if cpp __mutex.acquire(); #end
 		#if debug
 		if (object == null || !__pool.exists(object))
 		{
-			Log.error("Object is not a member of the pool");
+			trace("ObjectPool: Object is not a member of the pool");
+			#if cpp __mutex.release(); #end
+			return;
 		}
 		else if (!__pool.get(object))
 		{
-			Log.error("Object has already been released");
+			trace("ObjectPool: Object has already been released");
+			#if cpp __mutex.release(); #end
+			return;
 		}
 		#end
 
@@ -116,10 +131,12 @@ class ObjectPool<T>
 		{
 			__pool.remove(object);
 		}
+		#if cpp __mutex.release(); #end
 	}
 
 	public function remove(object:T):Void
 	{
+		#if cpp __mutex.acquire(); #end
 		if (object != null && __pool.exists(object))
 		{
 			__pool.remove(object);
@@ -143,6 +160,7 @@ class ObjectPool<T>
 				activeObjects--;
 			}
 		}
+		#if cpp __mutex.release(); #end
 	}
 
 	@:noCompletion private inline function __addInactive(object:T):Void
@@ -287,6 +305,3 @@ class ObjectPool<T>
 		return value;
 	}
 }
-#else
-typedef ObjectPool<T> = lime.utils.ObjectPool<T>;
-#end
