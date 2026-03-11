@@ -362,6 +362,17 @@ class DisplayObjectRenderer extends EventDispatcher
 			var pixelRatio = 1;
 			#else
 			var pixelRatio = __pixelRatio;
+			// Boost cache bitmap resolution to match the renderer's draw transform.
+			// BitmapData.draw() may scale up via worldTransform (e.g. video export
+			// batchMatrix ~2x), but __pixelRatio only reflects window.scale (1 on
+			// Windows).  Without this, cache bitmaps (text with filters) are
+			// rasterized at 1x and upscaled → blurry.
+			var wt = __worldTransform;
+			if (wt != null)
+			{
+				var wtScale = Math.max(Math.sqrt(wt.a * wt.a + wt.b * wt.b), Math.sqrt(wt.c * wt.c + wt.d * wt.d));
+				if (wtScale > pixelRatio) pixelRatio = wtScale;
+			}
 			#end
 
 			if (updateTransform || needRender)
@@ -401,6 +412,7 @@ class DisplayObjectRenderer extends EventDispatcher
 			{
 				updateTransform = true;
 				displayObject.__cacheBitmapBackground = displayObject.opaqueBackground;
+				displayObject.__cacheBitmapScale = pixelRatio;
 
 				if (filterWidth >= 0.5 && filterHeight >= 0.5)
 				{
@@ -440,6 +452,7 @@ class DisplayObjectRenderer extends EventDispatcher
 					displayObject.__cacheBitmapData2 = null;
 					displayObject.__cacheBitmapData3 = null;
 					displayObject.__cacheBitmapRenderer = null;
+					displayObject.__cacheBitmapScale = 0;
 
 					if (displayObject.__drawableType == TEXT_FIELD)
 					{
@@ -475,10 +488,15 @@ class DisplayObjectRenderer extends EventDispatcher
 			{
 				displayObject.__cacheBitmap.__worldTransform.copyFrom(displayObject.__worldTransform);
 
+				// Use the scale at which the cache was actually rendered, not the
+				// current context's pixelRatio — they may differ (e.g. cache was
+				// rendered at 2x during BitmapData.draw, but screen render has PR=1).
+				var renderPR = displayObject.__cacheBitmapScale > 0 ? displayObject.__cacheBitmapScale : pixelRatio;
+
 				if (bitmapMatrix == displayObject.__renderTransform)
 				{
 					displayObject.__cacheBitmap.__renderTransform.identity();
-					displayObject.__cacheBitmap.__renderTransform.scale(1 / pixelRatio, 1 / pixelRatio);
+					displayObject.__cacheBitmap.__renderTransform.scale(1 / renderPR, 1 / renderPR);
 					displayObject.__cacheBitmap.__renderTransform.tx = displayObject.__renderTransform.tx + offsetX;
 					displayObject.__cacheBitmap.__renderTransform.ty = displayObject.__renderTransform.ty + offsetY;
 				}
@@ -487,8 +505,8 @@ class DisplayObjectRenderer extends EventDispatcher
 					displayObject.__cacheBitmap.__renderTransform.copyFrom(displayObject.__cacheBitmapMatrix);
 					displayObject.__cacheBitmap.__renderTransform.invert();
 					displayObject.__cacheBitmap.__renderTransform.concat(displayObject.__renderTransform);
-					displayObject.__cacheBitmap.__renderTransform.a *= 1 / pixelRatio;
-					displayObject.__cacheBitmap.__renderTransform.d *= 1 / pixelRatio;
+					displayObject.__cacheBitmap.__renderTransform.a *= 1 / renderPR;
+					displayObject.__cacheBitmap.__renderTransform.d *= 1 / renderPR;
 					displayObject.__cacheBitmap.__renderTransform.tx += offsetX;
 					displayObject.__cacheBitmap.__renderTransform.ty += offsetY;
 				}

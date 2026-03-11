@@ -995,6 +995,7 @@ class BitmapData implements IBitmapDrawable
 			#end
 
 			renderer.__allowSmoothing = smoothing;
+			renderer.__pixelRatio = #if openfl_disable_hdpi 1 #else Lib.current.stage.window.scale #end;
 			renderer.__overrideBlendMode = blendMode;
 
 			renderer.__worldTransform = transform;

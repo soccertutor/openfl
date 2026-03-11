@@ -17,7 +17,11 @@ class Context3DTextField
 {
 	public static function render(textField:TextField, renderer:OpenGLRenderer):Void
 	{
-		renderer.__softwareRenderer.__pixelRatio = renderer.__pixelRatio;
+		var wt = textField.__worldTransform;
+		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
+		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
+
+		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
 
 		#if (js && html5)
 		CanvasTextField.render(textField, cast renderer.__softwareRenderer, textField.__worldTransform);
@@ -52,6 +56,12 @@ class Context3DTextField
 
 	public static function renderMask(textField:TextField, renderer:OpenGLRenderer):Void
 	{
+		var wt = textField.__worldTransform;
+		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
+		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
+
+		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
+
 		#if (js && html5)
 		CanvasTextField.render(textField, cast renderer.__softwareRenderer, textField.__worldTransform);
 		#elseif lime_cairo
