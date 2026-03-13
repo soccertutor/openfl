@@ -21,6 +21,19 @@ class Context3DTextField
 		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
 		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
 
+		// Factor in renderer's draw matrix (e.g. BitmapData.draw batchMatrix).
+		// textField.__worldTransform only has the local display-tree scale;
+		// renderer.__worldTransform carries the additional draw-call scale.
+		// On screen, renderer.__worldTransform is identity → no effect.
+		var rwt = renderer.__worldTransform;
+		if (rwt != null)
+		{
+			var rsx = Math.sqrt(rwt.a * rwt.a + rwt.b * rwt.b);
+			var rsy = Math.sqrt(rwt.c * rwt.c + rwt.d * rwt.d);
+			sx *= rsx;
+			sy *= rsy;
+		}
+
 		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
 
 		#if (js && html5)
@@ -59,6 +72,15 @@ class Context3DTextField
 		var wt = textField.__worldTransform;
 		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
 		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
+
+		var rwt = renderer.__worldTransform;
+		if (rwt != null)
+		{
+			var rsx = Math.sqrt(rwt.a * rwt.a + rwt.b * rwt.b);
+			var rsy = Math.sqrt(rwt.c * rwt.c + rwt.d * rwt.d);
+			sx *= rsx;
+			sy *= rsy;
+		}
 
 		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
 
