@@ -17,24 +17,12 @@ class Context3DTextField
 {
 	public static function render(textField:TextField, renderer:OpenGLRenderer):Void
 	{
-		var wt = textField.__worldTransform;
-		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
-		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
-
-		// Factor in renderer's draw matrix (e.g. BitmapData.draw batchMatrix).
-		// textField.__worldTransform only has the local display-tree scale;
-		// renderer.__worldTransform carries the additional draw-call scale.
-		// On screen, renderer.__worldTransform is identity → no effect.
-		var rwt = renderer.__worldTransform;
-		if (rwt != null)
-		{
-			var rsx = Math.sqrt(rwt.a * rwt.a + rwt.b * rwt.b);
-			var rsy = Math.sqrt(rwt.c * rwt.c + rwt.d * rwt.d);
-			sx *= rsx;
-			sy *= rsy;
-		}
-
-		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
+		// Boost pixelRatio by renderer's draw matrix (BitmapData.draw batchMatrix).
+		// During normal screen rendering, __worldTransform is null → no boost.
+		// Don't use textField.__worldTransform here — its scale changes on window
+		// resize but the text cache isn't invalidated by pixelRatio change, causing
+		// stale cache + new transform = mispositioned text.
+		renderer.__softwareRenderer.__pixelRatio = rendererPixelRatio(renderer);
 
 		#if (js && html5)
 		CanvasTextField.render(textField, cast renderer.__softwareRenderer, textField.__worldTransform);
@@ -69,20 +57,7 @@ class Context3DTextField
 
 	public static function renderMask(textField:TextField, renderer:OpenGLRenderer):Void
 	{
-		var wt = textField.__worldTransform;
-		var sx = Math.sqrt(wt.a * wt.a + wt.b * wt.b);
-		var sy = Math.sqrt(wt.c * wt.c + wt.d * wt.d);
-
-		var rwt = renderer.__worldTransform;
-		if (rwt != null)
-		{
-			var rsx = Math.sqrt(rwt.a * rwt.a + rwt.b * rwt.b);
-			var rsy = Math.sqrt(rwt.c * rwt.c + rwt.d * rwt.d);
-			sx *= rsx;
-			sy *= rsy;
-		}
-
-		renderer.__softwareRenderer.__pixelRatio = Math.max(renderer.__pixelRatio, Math.max(sx, sy));
+		renderer.__softwareRenderer.__pixelRatio = rendererPixelRatio(renderer);
 
 		#if (js && html5)
 		CanvasTextField.render(textField, cast renderer.__softwareRenderer, textField.__worldTransform);
@@ -90,6 +65,21 @@ class Context3DTextField
 		CairoTextField.render(textField, cast renderer.__softwareRenderer, textField.__worldTransform);
 		#end
 		textField.__graphics.__hardwareDirty = false;
+	}
+
+	/** Compute pixelRatio from renderer's draw matrix only (not display-tree transform). **/
+	private static function rendererPixelRatio(renderer:OpenGLRenderer):Float
+	{
+		var pixelRatio = renderer.__pixelRatio;
+		var rwt = renderer.__worldTransform;
+		if (rwt != null)
+		{
+			var rsx = Math.sqrt(rwt.a * rwt.a + rwt.b * rwt.b);
+			var rsy = Math.sqrt(rwt.c * rwt.c + rwt.d * rwt.d);
+			var rs = Math.max(rsx, rsy);
+			if (rs > pixelRatio) pixelRatio = rs;
+		}
+		return pixelRatio;
 	}
 }
 #end
