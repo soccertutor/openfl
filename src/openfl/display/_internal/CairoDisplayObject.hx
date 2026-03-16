@@ -75,7 +75,7 @@ class CairoDisplayObject
 		#if lime_cairo
 		if (displayObject.__graphics != null)
 		{
-			CairoGraphics.renderMask(displayObject.__graphics, renderer);
+			CairoGraphics.renderMask(renderer.__graphicsState, displayObject.__graphics, renderer);
 		}
 		#end
 	}

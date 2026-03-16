@@ -51,7 +51,7 @@ class CairoDisplayObjectContainer
 
 		if (displayObjectContainer.__graphics != null)
 		{
-			CairoGraphics.renderMask(displayObjectContainer.__graphics, renderer);
+			CairoGraphics.renderMask(renderer.__graphicsState, displayObjectContainer.__graphics, renderer);
 		}
 
 		for (child in displayObjectContainer.__children)

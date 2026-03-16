@@ -7,6 +7,7 @@ import openfl.display._internal.DrawCommandReader;
 import openfl.utils._internal.Float32Array;
 import openfl.utils._internal.UInt16Array;
 import openfl.display.BitmapData;
+import openfl.display.CairoRenderer;
 import openfl.display.Graphics;
 import openfl.display.OpenGLRenderer;
 import openfl.geom.ColorTransform;
@@ -648,7 +649,8 @@ class Context3DGraphics
 			#if (js && html5)
 			CanvasGraphics.render(graphics, cast renderer.__softwareRenderer);
 			#elseif lime_cairo
-			CairoGraphics.render(graphics, cast renderer.__softwareRenderer);
+			var cairoRenderer:CairoRenderer = cast renderer.__softwareRenderer;
+			CairoGraphics.render(cairoRenderer.__graphicsState, graphics, cairoRenderer);
 			#end
 
 			renderer.__softwareRenderer.__worldTransform = cacheTransform;

@@ -5,7 +5,7 @@ import openfl.display._internal.CairoBitmap;
 import openfl.display._internal.CairoBitmapData;
 import openfl.display._internal.CairoDisplayObject;
 import openfl.display._internal.CairoDisplayObjectContainer;
-import openfl.display._internal.CairoGraphics;
+import openfl.display._internal.CairoGraphicsState;
 import openfl.display._internal.CairoShape;
 import openfl.display._internal.CairoSimpleButton;
 import openfl.display._internal.CairoTextField;
@@ -44,6 +44,7 @@ class CairoRenderer extends DisplayObjectRenderer
 	@SuppressWarnings("checkstyle:Dynamic")
 	public var cairo:#if lime CairoRenderContext #else Dynamic #end;
 
+	@:noCompletion private var __graphicsState:CairoGraphicsState = new CairoGraphicsState();
 	@:noCompletion private var __matrix:Matrix;
 	@SuppressWarnings("checkstyle:Dynamic") @:noCompletion private var __matrix3:#if lime Matrix3 #else Dynamic #end;
 

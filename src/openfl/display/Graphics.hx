@@ -2,6 +2,7 @@ package openfl.display;
 
 #if !flash
 import openfl.display._internal.CairoGraphics;
+import openfl.display._internal.CairoGraphicsState;
 import openfl.display._internal.CanvasGraphics;
 import openfl.display._internal.Context3DBuffer;
 import openfl.display._internal.DrawCommandBuffer;
@@ -1703,7 +1704,7 @@ import js.html.CanvasRenderingContext2D;
 				#if (js && html5)
 				return CanvasGraphics.hitTest(this, px, py);
 				#elseif (lime_cffi)
-				return CairoGraphics.hitTest(this, px, py);
+				return CairoGraphics.hitTest(new CairoGraphicsState(), this, px, py);
 				#end
 			}
 
