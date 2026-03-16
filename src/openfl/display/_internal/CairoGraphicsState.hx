@@ -1,6 +1,7 @@
 package openfl.display._internal;
 
 #if !flash
+import openfl.display._internal.CairoGraphics.Scale9GridBounds;
 import openfl.display._internal.DrawCommandBuffer;
 import openfl.display.BitmapData;
 import openfl.display.Graphics;

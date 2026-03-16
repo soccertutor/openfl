@@ -597,8 +597,8 @@ class CairoGraphics
 
 					case DRAW_ROUND_RECT:
 						var c = data.readDrawRoundRect();
-						s.fillCommands.drawRoundRect(s, c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
-						s.strokeCommands.drawRoundRect(s, c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
+						s.fillCommands.drawRoundRect(c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
+						s.strokeCommands.drawRoundRect(c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
 
 					case WINDING_EVEN_ODD:
 						data.readWindingEvenOdd();
@@ -2067,11 +2067,11 @@ class CairoGraphics
 
 					case DRAW_ROUND_RECT:
 						var c = data.readDrawRoundRect();
-						s.fillCommands.drawRoundRect(s, c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
+						s.fillCommands.drawRoundRect(c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
 
 						if (hasLineStyle)
 						{
-							s.strokeCommands.drawRoundRect(s, c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
+							s.strokeCommands.drawRoundRect(c.x, c.y, c.width, c.height, c.ellipseWidth, c.ellipseHeight);
 						}
 
 					case DRAW_QUADS:
@@ -2239,7 +2239,7 @@ private typedef NormalizedUVT =
 	uvt:Vector<Float>
 }
 
-private class Scale9GridBounds
+class Scale9GridBounds
 {
 	public var scale9MinX(default, null):Null<Float> = null;
 	public var scale9MinY(default, null):Null<Float> = null;
