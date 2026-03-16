@@ -187,6 +187,7 @@ class TextFormat
 		(`null`), the default tab stop is 4 (average character width).
 	**/
 	public var tabStops:Array<Int>;
+	public var textDirection:openfl.text._internal.TextLayout.TextDirection = INVALID;
 
 	/**
 		Indicates the target window where the hyperlink is displayed. If the
@@ -337,6 +338,7 @@ class TextFormat
 
 		if (format.__ascent != null) __ascent = format.__ascent;
 		if (format.__descent != null) __descent = format.__descent;
+		if (format.textDirection != INVALID) textDirection = format.textDirection;
 
 		__toCacheKey();
 	}
