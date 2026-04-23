@@ -1849,22 +1849,26 @@ class CairoGraphics
 		else
 		{
 			s.hitTesting = false;
-			var needsUpscaling = false;
 
 			if (graphics.__cairo != null)
 			{
 				var surface:CairoImageSurface = cast graphics.__cairo.target;
 
-				if (width > surface.width || height > surface.height)
+				// Surface must match __width x __height exactly. Context3DShape maps the
+				// full bitmap dimensions to world coords via __worldTransform — if the
+				// surface is oversized (from a previous high-scale render, or from the
+				// legacy 1.25x upscaling margin), Cairo fills only the __width x __height
+				// region and the empty padding visually clips content at the shape's
+				// right/bottom edges.
+				if (width != surface.width || height != surface.height)
 				{
 					graphics.__cairo = null;
-					needsUpscaling = true;
 				}
 			}
 
 			if (graphics.__cairo == null || graphics.__bitmap == null)
 			{
-				var bitmap = needsUpscaling ? new BitmapData(Std.int(width * 1.25), Std.int(height * 1.25), true, 0) : new BitmapData(width, height, true, 0);
+				var bitmap = new BitmapData(width, height, true, 0);
 				var surface = bitmap.getSurface();
 				graphics.__cairo = new Cairo(surface);
 				graphics.__bitmap = bitmap;
